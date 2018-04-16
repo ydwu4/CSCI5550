@@ -1,0 +1,10 @@
+#pragma once
+
+enum MsgType {
+	INIT, READ_SMALL_FILE, READ_LARGE_FILE, WRITE_SMALL_FILE, READ_LARGE_FILE, GET_ATTR
+
+};
+
+
+
+
