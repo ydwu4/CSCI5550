@@ -45,6 +45,7 @@ using namespace std;
 			if (res != 0) {
 				cout << "worker: connect to " << master_point << " fails with error:" << strerror(errno) << endl;				
 			}
+			fprintf(stderr, "initialize socket succeeds\n");
 		}
 		
 		// this is the main function
@@ -78,6 +79,7 @@ using namespace std;
 				char *data = (char*) zmq_msg_data(&msg);
 				assert (data != NULL);
 				
+				cout << "msg type:" << data[0] << endl;
 				switch(data[0]) {
 				case '1':
 					init(&msg);
@@ -92,9 +94,10 @@ using namespace std;
 				case '6':
 					get_metadata(&msg);
 				default:
-					cout << "error unknown message type" << endl;
+					cout << "error unknown message type with:" << data[0] << endl;
 				}	
 			}
+
 			cout << "worker exit main loop and try to close msg" << endl;
 			rc = zmq_msg_close(&msg);	
 			if (rc != 0) {

@@ -27,8 +27,11 @@ extern "C" {
 #include "log.h"
 }
 
+#include <fuse.h>
+
 #include "io_manager.hpp"
 
+#include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
@@ -726,7 +729,6 @@ void *bb_init(struct fuse_conn_info *conn)
     log_fuse_context(fuse_get_context());
     
 
-	// here we issue init msg via IO manager to confirm that workers are ready
 	
 
     return BB_DATA;
@@ -919,8 +921,8 @@ static void show_help(const char *progname)
 		   "    --debug, -d                 Enable debug            [Default] false\n"
 		   "    --help, -h                  Show help               [Default] false\n"
 		   "    --theta=<lu>                Set theta               [Default] 4096KB\n"
-		   "    --starting-port=<s>         Set master starting port[Default] 17000\n"     
-		   "    --num-workers=<d>			Set num of workers      [No Default]\n"
+		   "    --starting-port=<d>         Set master starting port[Default] 17000\n"     
+		   "    --num-workers=<d>           Set num of workers      [No Default]\n"
 	       "\n");
 }
 
@@ -946,6 +948,7 @@ int main(int argc, char *argv[])
     // See which version of fuse we're running
     fprintf(stderr, "Fuse library version %d.%d\n", FUSE_MAJOR_VERSION, FUSE_MINOR_VERSION);
     
+	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
     // Perform some sanity checking on the command line:  make sure
     // there are enough arguments, and that neither of the last two
     // start with a hyphen (this will break if you actually have a
@@ -957,7 +960,16 @@ int main(int argc, char *argv[])
 	options.starting_port = 17000;
 	options.num_workers = 0;
 
-	struct fuse_args args = FUSE_ARGS_INIT(argc, argv);
+	if (fuse_opt_parse(&args, &options, option_spec, NULL) == -1) {
+		show_help(argv[0]);
+		return 1;
+	}
+
+	if (options.show_help) {
+		show_help(argv[0]);
+		assert(fuse_opt_add_arg(&args, "--help") == 0);
+		args.argv[0] = (char*)"";
+	}
 
     bb_data = (struct bb_state*)malloc(sizeof(struct bb_state));
     if (bb_data == NULL) {
@@ -971,24 +983,31 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+    bb_data->logfile = log_open("master.log");
+
+	fprintf(stderr, "starting_port:%d\n", options.starting_port);
+	fprintf(stderr, "num_workers:%d\n", options.num_workers);
+	fprintf(stderr, "theta:%lu\n", options.theta);
+
 	IOManager& io_manager = IOManager::get_instance();
 	io_manager.init_sockets(options.num_workers, options.starting_port);
+	fprintf(stderr, "initialize sockets for io manager\n");
 	// it is sending init message to all the workers
 	// only when all the workers reply it will move forward
+	// here we issue init msg via IO manager to confirm that workers are ready
 	io_manager.init();
 
 
     // Pull the rootdir out of the argument list and save it in my
     // internal data
     
-    bb_data->logfile = log_open("master.log");
 	bb_data->starting_port = options.starting_port;
 	bb_data->theta = options.theta;
 	bb_data->num_workers = options.num_workers;
     
     // turn over control to fuse
     fprintf(stderr, "about to call fuse_main\n");
-    fuse_stat = fuse_main(argc, argv, &bb_oper, bb_data);
+    fuse_stat = fuse_main(args.argc, args.argv, &bb_oper, bb_data);
     fprintf(stderr, "fuse_main returned %d\n", fuse_stat);
     
     return fuse_stat;

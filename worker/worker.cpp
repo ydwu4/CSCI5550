@@ -34,7 +34,7 @@ static void show_help(const char *progname) {
 	printf("usage: %s [options]\n\n", progname);
 	printf("Worker specific options:\n"
 		   " --index=<d>               The index of worker  [Required]\n"
-		   " --starting-port=<d>      The starting port of master [Defualt] 17000\n"
+		   " --starting-port=<d>       The starting port of master [Defualt] 17000\n"
 		   " --debug, -d               Enable debug         [Default] Enable debug\n"
 		   " --help, -h                Show help            [Default] Show help\n"
 		   " --master-addr=<s>         Set master addr      [Default] 127.0.0.1\n"
@@ -71,10 +71,16 @@ int main(int argc, char *argv[])
 		return 0;
 	}
 
+
+
 	char log_filename[50];
 	sprintf(log_filename, "worker%d.log", options.index);
+	fprintf(stderr, "log filename:%s\n", log_filename);
 	log_open(log_filename);
 
+
+	fprintf(stderr, "master_addr:%s\n", options.master_addr);
+	fprintf(stderr, "starting_port = %d\n", options.starting_port);
 	Worker &worker = Worker::get_instance();
 	fprintf(stderr, "worker index:%u\n", options.index);	
 	worker.set_master_addr(options.master_addr);
