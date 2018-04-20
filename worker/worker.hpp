@@ -83,18 +83,25 @@ using namespace std;
 				switch(data[0]) {
 				case '1':
 					init(&msg);
+					break;
 				case '2':
 					small_file_read(&msg);
+					break;
 				case '3':
 					large_file_read(&msg);
+					break;
 				case '4':
 					small_file_write(&msg);
+					break;
 				case '5':
 					large_file_write(&msg);
+					break;
 				case '6':
 					get_metadata(&msg);
+					break;
 				default:
 					cout << "error unknown message type with:" << data[0] << endl;
+					break;
 				}	
 			}
 

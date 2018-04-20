@@ -26,7 +26,7 @@
 struct bb_state {
 	int starting_port;
 	int num_workers;
-	long long int theta;
+	size_t theta;
     FILE *logfile;
     char *rootdir;
 };
