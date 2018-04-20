@@ -25,12 +25,6 @@ extern "C" {
 #include "config.h"
 #include "params.h"
 #include "log.h"
-}
-
-#include <fuse.h>
-
-#include "io_manager.hpp"
-
 #include <assert.h>
 #include <ctype.h>
 #include <dirent.h>
@@ -43,10 +37,19 @@ extern "C" {
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/xattr.h>
+}
+
+#include <fuse.h>
+
+#include "io_manager.hpp"
+#include "buffer_manager.hpp"
+#include "metadata_manager.hpp"
+
 
 #ifdef HAVE_SYS_XATTR_H
-#include <sys/xattr.h>
 #endif
 
 
@@ -90,11 +93,9 @@ int bb_getattr(const char *path, struct stat *statbuf)
 
     retstat = log_syscall("lstat", lstat(fpath, statbuf), 0);
     
-	// here we issue get attr msg via IO Manager
-
-
-	// get attr via IO Manager finished
-
+	MetadataManager &mm = MetadataManager::get_instance();
+	size_t real_size = mm.get_size(statbuf->st_ino);
+	statbuf->st_size = real_size;
 
     log_stat(statbuf);
     
@@ -359,12 +360,14 @@ int bb_read(const char *path, char *buf, size_t size, off_t offset, struct fuse_
     // no need to get fpath on this one, since I work from fi->fh not the path
     log_fi(fi);
 
-	// here we issue READ_SMALL_FILE or READ_LARGE_FILE msg via IO manager
-
-
+	// here we issue READ_SMALL_FILE or READ_LARGE_FILE msg via Buffer Manager
+	struct stat stbuf;
+	fstat(fi->fh, &stbuf);
+	BufferManager &bm = BufferManager::get_instance();
+	retstat = bm.read(stbuf.st_ino, buf, size, offset);
 	// read finishes
 
-    return log_syscall("pread", pread(fi->fh, buf, size, offset), 0);
+    return retstat;
 }
 
 /** Write data to an open file
@@ -387,11 +390,20 @@ int bb_write(const char *path, const char *buf, size_t size, off_t offset,
 	    );
     // no need to get fpath on this one, since I work from fi->fh not the path
     log_fi(fi);
+	MetadataManager &mm = MetadataManager::get_instance();	
 
+	struct stat stbuf;
+	fstat(fi->fh, &stbuf);
+	BufferManager &bm = BufferManager::get_instance();
+	size_t cur_size = mm.get_size(stbuf.st_ino);
+	retstat = bm.write(stbuf.st_ino, buf, size, offset);
+	if (offset + retstat > cur_size) {
+		mm.set_size(stbuf.st_ino, offset + retstat);	
+	}
 
 	// here we issue WRITE_SMALL_FILE or WRITE_LARGE_FILE msg via IO manager
 
-    return log_syscall("pwrite", pwrite(fi->fh, buf, size, offset), 0);
+    return retstat;
 }
 
 /** Get file system statistics
@@ -470,6 +482,11 @@ int bb_release(const char *path, struct fuse_file_info *fi)
     log_msg("\nbb_release(path=\"%s\", fi=0x%08x)\n",
 	  path, fi);
     log_fi(fi);
+
+	BufferManager &bm = BufferManager::get_instance();
+	struct stat stbuf;
+	fstat(fi->fh, &stbuf);
+	int ret = bm.close(stbuf.st_ino);	
 
     // We need to close the file.  Had we allocated any resources
     // (buffers etc) we'd need to free them here as well.
@@ -895,7 +912,7 @@ static struct options {
 	int show_help;
 	int starting_port;
 	int num_workers;
-	uint64_t theta;
+	size_t theta;
 	const char* log_filename;
 } options;
 
@@ -1000,7 +1017,15 @@ int main(int argc, char *argv[])
 
     // Pull the rootdir out of the argument list and save it in my
     // internal data
-    
+    char cur_dir[256];
+	if (getcwd(cur_dir, sizeof(cur_dir)) != NULL) {
+		fprintf(stderr, "current directory is %s\n", cur_dir);
+	}
+	else {
+		perror("getcwd() error");
+	}
+
+	bb_data->rootdir = strdup(cur_dir);
 	bb_data->starting_port = options.starting_port;
 	bb_data->theta = options.theta;
 	bb_data->num_workers = options.num_workers;

@@ -5,6 +5,8 @@
 #include <string>
 
 
+#define BLOCK_SIZE 4096
+
 class IOManager {
 	public:
 		static IOManager &get_instance() {
@@ -18,13 +20,13 @@ class IOManager {
 
 		int get_attr();
 
-		int send_small_file();
+		ssize_t read_small_file(ino_t, char*, size_t, off_t);
 
-		int send_large_file();
+		ssize_t read_large_file(ino_t, char*, size_t, off_t);
 
-		int write_small_file();
+		ssize_t write_small_file(ino_t, const char*, size_t, off_t);
 
-		int write_large_file();
+		ssize_t write_large_file(ino_t, const char*, size_t, off_t);
 
 	private:
 		IOManager() {}
